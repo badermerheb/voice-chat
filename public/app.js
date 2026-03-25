@@ -10,11 +10,21 @@ let isDeafened = false;
 // Map of peerId -> { pc, gainNode, audioElement, username }
 const peers = new Map();
 
-// ICE servers (free Google STUN)
+// ICE servers (STUN + free TURN fallback for symmetric NAT)
 const iceConfig = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
   ],
 };
 
@@ -152,17 +162,33 @@ function createPeerConnection(peerId, isOfferer) {
     const remoteStream = event.streams[0];
     if (!remoteStream) return;
 
+    // Resume audio context if suspended (browser autoplay policy)
+    if (audioContext.state === 'suspended') {
+      audioContext.resume();
+    }
+
     // Use Web Audio API for per-user volume control
+    // Route: source → gainNode → destinationNode → <audio> element
     const source = audioContext.createMediaStreamSource(remoteStream);
     const gainNode = audioContext.createGain();
+    const destination = audioContext.createMediaStreamDestination();
     gainNode.gain.value = isDeafened ? 0 : 1;
     source.connect(gainNode);
-    gainNode.connect(audioContext.destination);
+    gainNode.connect(destination);
+
+    // Create an <audio> element to actually play the sound
+    const audioEl = document.createElement('audio');
+    audioEl.srcObject = destination.stream;
+    audioEl.autoplay = true;
+    audioEl.playsInline = true;
+    document.body.appendChild(audioEl);
+    audioEl.play().catch(() => {});
 
     const peer = peers.get(peerId);
     if (peer) {
       peer.gainNode = gainNode;
       peer.source = source;
+      peer.audioEl = audioEl;
     }
   };
 
@@ -204,6 +230,11 @@ function removePeer(peerId) {
     peer.pc.close();
     if (peer.source) peer.source.disconnect();
     if (peer.gainNode) peer.gainNode.disconnect();
+    if (peer.audioEl) {
+      peer.audioEl.pause();
+      peer.audioEl.srcObject = null;
+      peer.audioEl.remove();
+    }
     peers.delete(peerId);
   }
   const card = document.querySelector(`.user-card[data-id="${peerId}"]`);
@@ -327,6 +358,11 @@ function leave() {
     peer.pc.close();
     if (peer.source) peer.source.disconnect();
     if (peer.gainNode) peer.gainNode.disconnect();
+    if (peer.audioEl) {
+      peer.audioEl.pause();
+      peer.audioEl.srcObject = null;
+      peer.audioEl.remove();
+    }
   }
   peers.clear();
 

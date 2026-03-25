@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voice Chat</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Join Screen -->
+  <div id="join-screen">
+    <div class="join-box">
+      <h1>Voice Chat</h1>
+      <p>Enter your name to join the room</p>
+      <input type="text" id="username-input" placeholder="Your name..." maxlength="20" autocomplete="off">
+      <button id="join-btn">Join</button>
+    </div>
+  </div>
+
+  <!-- Chat Room -->
+  <div id="room-screen" class="hidden">
+    <div class="room-header">
+      <h2>Voice Room</h2>
+      <span id="user-count">0 online</span>
+    </div>
+
+    <div id="users-list"></div>
+
+    <div class="self-controls">
+      <button id="mute-btn" class="control-btn" title="Mute/Unmute">
+        <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
+          <path id="mic-icon-path" d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5z"/>
+          <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+        </svg>
+        <span>Mute</span>
+      </button>
+      <button id="deafen-btn" class="control-btn" title="Deafen/Undeafen">
+        <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
+          <path id="headphone-icon-path" d="M12 1c-4.97 0-9 4.03-9 9v7c0 1.66 1.34 3 3 3h3v-8H5v-2c0-3.87 3.13-7 7-7s7 3.13 7 7v2h-4v8h3c1.66 0 3-1.34 3-3v-7c0-4.97-4.03-9-9-9z"/>
+        </svg>
+        <span>Deafen</span>
+      </button>
+      <button id="leave-btn" class="control-btn leave" title="Leave">
+        <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5c-1.11 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
+        </svg>
+        <span>Leave</span>
+      </button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

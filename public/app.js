@@ -229,64 +229,33 @@ async function createPeerConnection(peerId, isOfferer) {
     dbg(`  Signaling state: ${pc.signalingState} for ${peerId}`);
   };
 
-  // Handle incoming audio - SIMPLE PATH: direct <audio> element + Web Audio for volume
+  // Handle incoming audio - DIRECT <audio> element (no Web Audio API routing)
   pc.ontrack = (event) => {
     dbg(`  ontrack from ${peerId}: kind=${event.track.kind}, readyState=${event.track.readyState}, streams=${event.streams.length}`);
 
     const remoteStream = event.streams[0] || new MediaStream([event.track]);
 
-    // Resume audio context if suspended
-    if (audioContext && audioContext.state === 'suspended') {
-      audioContext.resume().then(() => dbg('  AudioContext resumed'));
+    // Direct <audio> element - most reliable playback method
+    const audioEl = document.createElement('audio');
+    audioEl.srcObject = remoteStream;
+    audioEl.autoplay = true;
+    audioEl.playsInline = true;
+    audioEl.volume = isDeafened ? 0 : 1.0;
+    document.body.appendChild(audioEl);
+
+    const playPromise = audioEl.play();
+    if (playPromise) {
+      playPromise
+        .then(() => dbg(`  Audio element PLAYING for ${peerId}`))
+        .catch((e) => dbg(`  Audio play FAILED for ${peerId}: ${e.message}`));
     }
 
-    // APPROACH: Use Web Audio API with MediaStreamDestination -> <audio> element
-    try {
-      const source = audioContext.createMediaStreamSource(remoteStream);
-      const gainNode = audioContext.createGain();
-      const dest = audioContext.createMediaStreamDestination();
-      gainNode.gain.value = isDeafened ? 0 : 1;
-      source.connect(gainNode);
-      gainNode.connect(dest);
-
-      const audioEl = document.createElement('audio');
-      audioEl.srcObject = dest.stream;
-      audioEl.autoplay = true;
-      audioEl.playsInline = true;
-      audioEl.volume = 1.0;
-      document.body.appendChild(audioEl);
-
-      const playPromise = audioEl.play();
-      if (playPromise) {
-        playPromise
-          .then(() => dbg(`  Audio element PLAYING for ${peerId}`))
-          .catch((e) => dbg(`  Audio play FAILED for ${peerId}: ${e.message}`));
-      }
-
-      const peer = peers.get(peerId);
-      if (peer) {
-        peer.gainNode = gainNode;
-        peer.source = source;
-        peer.audioEl = audioEl;
-      }
-
-      dbg(`  Audio pipeline set up for ${peerId} (gain -> dest -> <audio>)`);
-    } catch (e) {
-      dbg(`  ERROR setting up audio for ${peerId}: ${e.message}`);
-
-      // FALLBACK: Just use a plain <audio> element, no Web Audio
-      dbg(`  Trying FALLBACK: direct <audio> element`);
-      const audioEl = document.createElement('audio');
-      audioEl.srcObject = remoteStream;
-      audioEl.autoplay = true;
-      audioEl.playsInline = true;
-      audioEl.volume = 1.0;
-      document.body.appendChild(audioEl);
-      audioEl.play().catch((e2) => dbg(`  Fallback play FAILED: ${e2.message}`));
-
-      const peer = peers.get(peerId);
-      if (peer) peer.audioEl = audioEl;
+    const peer = peers.get(peerId);
+    if (peer) {
+      peer.audioEl = audioEl;
     }
+
+    dbg(`  Audio set up for ${peerId} (direct <audio> srcObject)`);
   };
 
   // Add our audio track AFTER handlers are set
@@ -314,8 +283,6 @@ function removePeer(peerId) {
   const peer = peers.get(peerId);
   if (peer) {
     peer.pc.close();
-    if (peer.source) peer.source.disconnect();
-    if (peer.gainNode) peer.gainNode.disconnect();
     if (peer.audioEl) {
       peer.audioEl.pause();
       peer.audioEl.srcObject = null;
@@ -357,12 +324,12 @@ function addUserToUI(id, username, muted, deafened) {
     </div>
   `;
 
-  // Volume slider
+  // Volume slider - controls <audio> element volume directly
   const slider = card.querySelector('.volume-slider');
   slider.addEventListener('input', () => {
     const peer = peers.get(id);
-    if (peer && peer.gainNode) {
-      peer.gainNode.gain.value = slider.value / 100;
+    if (peer && peer.audioEl) {
+      peer.audioEl.volume = slider.value / 100;
     }
   });
 
@@ -410,13 +377,13 @@ function toggleDeafen() {
   isDeafened = !isDeafened;
 
   for (const [id, peer] of peers) {
-    if (peer.gainNode) {
+    if (peer.audioEl) {
       if (isDeafened) {
-        peer.gainNode.gain.value = 0;
+        peer.audioEl.volume = 0;
       } else {
         const card = document.querySelector(`.user-card[data-id="${id}"]`);
         const slider = card?.querySelector('.volume-slider');
-        peer.gainNode.gain.value = slider ? slider.value / 100 : 1;
+        peer.audioEl.volume = slider ? slider.value / 100 : 1;
       }
     }
   }
@@ -437,8 +404,6 @@ function leave() {
 
   for (const [id, peer] of peers) {
     peer.pc.close();
-    if (peer.source) peer.source.disconnect();
-    if (peer.gainNode) peer.gainNode.disconnect();
     if (peer.audioEl) {
       peer.audioEl.pause();
       peer.audioEl.srcObject = null;

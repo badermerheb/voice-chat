@@ -7,7 +7,7 @@ let myUsername = '';
 let isMuted = false;
 let isDeafened = false;
 
-// Map of peerId -> { pc, gainNode, audioElement, username }
+// Map of peerId -> { pc, gainNode, audioEl, source, username }
 const peers = new Map();
 
 // ICE servers
@@ -16,10 +16,20 @@ const iceConfig = {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' },
   ],
 };
+
+// ─── Debug Logger ───
+const debugLog = document.getElementById('debug-log');
+function dbg(msg) {
+  console.log(msg);
+  if (debugLog) {
+    const line = document.createElement('div');
+    line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    debugLog.appendChild(line);
+    debugLog.parentElement.scrollTop = debugLog.parentElement.scrollHeight;
+  }
+}
 
 // ─── DOM Elements ───
 const joinScreen = document.getElementById('join-screen');
@@ -51,25 +61,39 @@ async function join() {
       },
       video: false,
     });
+    dbg(`Mic access granted. Tracks: ${localStream.getAudioTracks().length}, enabled: ${localStream.getAudioTracks()[0]?.enabled}`);
   } catch (err) {
     alert('Microphone access is required. Please allow it and try again.');
+    dbg(`Mic DENIED: ${err.message}`);
     return;
   }
 
   audioContext = new AudioContext();
+  dbg(`AudioContext state: ${audioContext.state}, sampleRate: ${audioContext.sampleRate}`);
   myUsername = name;
 
   joinScreen.classList.add('hidden');
   roomScreen.classList.remove('hidden');
 
   socket.emit('join', name);
+  dbg(`Emitted join as "${name}", socket id: ${socket.id}`);
 }
 
 // ─── Socket Events ───
 
+socket.on('connect', () => {
+  dbg(`Socket connected: ${socket.id}`);
+});
+
+socket.on('disconnect', (reason) => {
+  dbg(`Socket disconnected: ${reason}`);
+});
+
 // Existing users already in the room
 socket.on('existing-users', (users) => {
+  dbg(`Got existing-users: ${users.length} users`);
   users.forEach((user) => {
+    dbg(`  existing user: ${user.username} (${user.id})`);
     addUserToUI(user.id, user.username, user.muted, user.deafened);
     createPeerConnection(user.id, true); // We are the offerer
   });
@@ -78,6 +102,7 @@ socket.on('existing-users', (users) => {
 
 // New user joins
 socket.on('user-joined', (user) => {
+  dbg(`user-joined: ${user.username} (${user.id})`);
   addUserToUI(user.id, user.username, user.muted, user.deafened);
   createPeerConnection(user.id, false); // They will send us an offer
   updateUserCount();
@@ -85,24 +110,49 @@ socket.on('user-joined', (user) => {
 
 // User leaves
 socket.on('user-left', (peerId) => {
+  dbg(`user-left: ${peerId}`);
   removePeer(peerId);
   updateUserCount();
 });
 
 // WebRTC signaling
 socket.on('offer', async ({ from, offer }) => {
-  const peer = peers.get(from);
-  if (!peer) return;
-  await peer.pc.setRemoteDescription(new RTCSessionDescription(offer));
-  const answer = await peer.pc.createAnswer();
-  await peer.pc.setLocalDescription(answer);
-  socket.emit('answer', { to: from, answer });
+  dbg(`Got OFFER from ${from}`);
+  let peer = peers.get(from);
+  if (!peer) {
+    dbg(`  No peer found for ${from}, creating one...`);
+    await createPeerConnection(from, false);
+    peer = peers.get(from);
+  }
+  if (!peer) {
+    dbg(`  STILL no peer for ${from}, aborting`);
+    return;
+  }
+  try {
+    await peer.pc.setRemoteDescription(new RTCSessionDescription(offer));
+    dbg(`  setRemoteDescription OK`);
+    const answer = await peer.pc.createAnswer();
+    await peer.pc.setLocalDescription(answer);
+    dbg(`  Sending ANSWER to ${from}`);
+    socket.emit('answer', { to: from, answer: peer.pc.localDescription });
+  } catch (e) {
+    dbg(`  ERROR handling offer: ${e.message}`);
+  }
 });
 
 socket.on('answer', async ({ from, answer }) => {
+  dbg(`Got ANSWER from ${from}`);
   const peer = peers.get(from);
-  if (!peer) return;
-  await peer.pc.setRemoteDescription(new RTCSessionDescription(answer));
+  if (!peer) {
+    dbg(`  No peer for ${from}`);
+    return;
+  }
+  try {
+    await peer.pc.setRemoteDescription(new RTCSessionDescription(answer));
+    dbg(`  setRemoteDescription(answer) OK`);
+  } catch (e) {
+    dbg(`  ERROR handling answer: ${e.message}`);
+  }
 });
 
 socket.on('ice-candidate', async ({ from, candidate }) => {
@@ -111,7 +161,7 @@ socket.on('ice-candidate', async ({ from, candidate }) => {
   try {
     await peer.pc.addIceCandidate(new RTCIceCandidate(candidate));
   } catch (e) {
-    // Ignore ICE errors silently
+    dbg(`ICE candidate error from ${from}: ${e.message}`);
   }
 });
 
@@ -128,21 +178,19 @@ socket.on('user-deafen-changed', ({ id, deafened }) => {
   const card = document.querySelector(`.user-card[data-id="${id}"]`);
   if (card) {
     card.classList.toggle('is-deafened', deafened);
-    const status = card.querySelector('.user-status');
-    status.textContent = deafened ? 'Deafened' : '';
+    card.querySelector('.user-status').textContent = deafened ? 'Deafened' : '';
   }
 });
 
 // Someone force-muted us
 socket.on('force-mute', () => {
-  if (!isMuted) {
-    toggleMute();
-  }
+  if (!isMuted) toggleMute();
 });
 
 // ─── WebRTC ───
 
 async function createPeerConnection(peerId, isOfferer) {
+  dbg(`createPeerConnection(${peerId}, offerer=${isOfferer})`);
   const pc = new RTCPeerConnection(iceConfig);
 
   // Store peer FIRST so handlers can find it
@@ -155,70 +203,107 @@ async function createPeerConnection(peerId, isOfferer) {
   });
 
   // ICE candidates
+  let iceCandidateCount = 0;
   pc.onicecandidate = (event) => {
     if (event.candidate) {
+      iceCandidateCount++;
       socket.emit('ice-candidate', { to: peerId, candidate: event.candidate });
+    } else {
+      dbg(`  ICE gathering done for ${peerId} (${iceCandidateCount} candidates)`);
     }
   };
 
-  // Log connection state for debugging
-  pc.onconnectionstatechange = () => {
-    console.log(`Peer ${peerId} connection: ${pc.connectionState}`);
-  };
-  pc.oniceconnectionstatechange = () => {
-    console.log(`Peer ${peerId} ICE: ${pc.iceConnectionState}`);
+  pc.onicegatheringstatechange = () => {
+    dbg(`  ICE gathering: ${pc.iceGatheringState} for ${peerId}`);
   };
 
-  // Handle incoming audio
+  pc.onconnectionstatechange = () => {
+    dbg(`  Connection state: ${pc.connectionState} for ${peerId}`);
+  };
+
+  pc.oniceconnectionstatechange = () => {
+    dbg(`  ICE connection: ${pc.iceConnectionState} for ${peerId}`);
+  };
+
+  pc.onsignalingstatechange = () => {
+    dbg(`  Signaling state: ${pc.signalingState} for ${peerId}`);
+  };
+
+  // Handle incoming audio - SIMPLE PATH: direct <audio> element + Web Audio for volume
   pc.ontrack = (event) => {
-    console.log(`Got remote track from ${peerId}`, event.track.kind);
+    dbg(`  ontrack from ${peerId}: kind=${event.track.kind}, readyState=${event.track.readyState}, streams=${event.streams.length}`);
+
     const remoteStream = event.streams[0] || new MediaStream([event.track]);
 
-    // Resume audio context if suspended (browser autoplay policy)
-    if (audioContext.state === 'suspended') {
-      audioContext.resume();
+    // Resume audio context if suspended
+    if (audioContext && audioContext.state === 'suspended') {
+      audioContext.resume().then(() => dbg('  AudioContext resumed'));
     }
 
-    // Use Web Audio API for per-user volume control
-    // Route: source → gainNode → destinationNode → <audio> element
-    const source = audioContext.createMediaStreamSource(remoteStream);
-    const gainNode = audioContext.createGain();
-    const destination = audioContext.createMediaStreamDestination();
-    gainNode.gain.value = isDeafened ? 0 : 1;
-    source.connect(gainNode);
-    gainNode.connect(destination);
+    // APPROACH: Use Web Audio API with MediaStreamDestination -> <audio> element
+    try {
+      const source = audioContext.createMediaStreamSource(remoteStream);
+      const gainNode = audioContext.createGain();
+      const dest = audioContext.createMediaStreamDestination();
+      gainNode.gain.value = isDeafened ? 0 : 1;
+      source.connect(gainNode);
+      gainNode.connect(dest);
 
-    // Create an <audio> element to actually play the sound
-    const audioEl = document.createElement('audio');
-    audioEl.srcObject = destination.stream;
-    audioEl.autoplay = true;
-    audioEl.playsInline = true;
-    audioEl.volume = 1.0;
-    document.body.appendChild(audioEl);
-    audioEl.play().catch((e) => console.error('Audio play failed:', e));
+      const audioEl = document.createElement('audio');
+      audioEl.srcObject = dest.stream;
+      audioEl.autoplay = true;
+      audioEl.playsInline = true;
+      audioEl.volume = 1.0;
+      document.body.appendChild(audioEl);
 
-    const peer = peers.get(peerId);
-    if (peer) {
-      peer.gainNode = gainNode;
-      peer.source = source;
-      peer.audioEl = audioEl;
+      const playPromise = audioEl.play();
+      if (playPromise) {
+        playPromise
+          .then(() => dbg(`  Audio element PLAYING for ${peerId}`))
+          .catch((e) => dbg(`  Audio play FAILED for ${peerId}: ${e.message}`));
+      }
+
+      const peer = peers.get(peerId);
+      if (peer) {
+        peer.gainNode = gainNode;
+        peer.source = source;
+        peer.audioEl = audioEl;
+      }
+
+      dbg(`  Audio pipeline set up for ${peerId} (gain -> dest -> <audio>)`);
+    } catch (e) {
+      dbg(`  ERROR setting up audio for ${peerId}: ${e.message}`);
+
+      // FALLBACK: Just use a plain <audio> element, no Web Audio
+      dbg(`  Trying FALLBACK: direct <audio> element`);
+      const audioEl = document.createElement('audio');
+      audioEl.srcObject = remoteStream;
+      audioEl.autoplay = true;
+      audioEl.playsInline = true;
+      audioEl.volume = 1.0;
+      document.body.appendChild(audioEl);
+      audioEl.play().catch((e2) => dbg(`  Fallback play FAILED: ${e2.message}`));
+
+      const peer = peers.get(peerId);
+      if (peer) peer.audioEl = audioEl;
     }
   };
 
   // Add our audio track AFTER handlers are set
   localStream.getTracks().forEach((track) => {
     pc.addTrack(track, localStream);
+    dbg(`  Added local track: ${track.kind}, enabled=${track.enabled}`);
   });
 
-  // Explicitly create and send offer (don't rely on onnegotiationneeded)
+  // Explicitly create and send offer
   if (isOfferer) {
     try {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       socket.emit('offer', { to: peerId, offer: pc.localDescription });
-      console.log(`Sent offer to ${peerId}`);
+      dbg(`  OFFER sent to ${peerId} (type=${offer.type}, sdp length=${offer.sdp.length})`);
     } catch (e) {
-      console.error('Error creating offer:', e);
+      dbg(`  ERROR creating offer: ${e.message}`);
     }
   }
 
@@ -295,7 +380,7 @@ function addUserToUI(id, username, muted, deafened) {
 }
 
 function updateUserCount() {
-  const count = document.querySelectorAll('.user-card').length + 1; // +1 for self
+  const count = document.querySelectorAll('.user-card').length + 1;
   userCount.textContent = `${count} online`;
 }
 
@@ -324,13 +409,11 @@ function toggleMute() {
 function toggleDeafen() {
   isDeafened = !isDeafened;
 
-  // Set all remote audio to 0 or restore
   for (const [id, peer] of peers) {
     if (peer.gainNode) {
       if (isDeafened) {
         peer.gainNode.gain.value = 0;
       } else {
-        // Restore to slider value
         const card = document.querySelector(`.user-card[data-id="${id}"]`);
         const slider = card?.querySelector('.volume-slider');
         peer.gainNode.gain.value = slider ? slider.value / 100 : 1;
@@ -342,19 +425,16 @@ function toggleDeafen() {
   deafenBtn.querySelector('span').textContent = isDeafened ? 'Undeafen' : 'Deafen';
   socket.emit('deafen-toggle', isDeafened);
 
-  // Auto-mute when deafening
   if (isDeafened && !isMuted) {
     toggleMute();
   }
 }
 
 function leave() {
-  // Stop all tracks
   if (localStream) {
     localStream.getTracks().forEach((t) => t.stop());
   }
 
-  // Close all peer connections
   for (const [id, peer] of peers) {
     peer.pc.close();
     if (peer.source) peer.source.disconnect();
@@ -367,10 +447,8 @@ function leave() {
   }
   peers.clear();
 
-  // Close audio context
   if (audioContext) audioContext.close();
 
-  // Reset state
   isMuted = false;
   isDeafened = false;
   muteBtn.classList.remove('active');
@@ -379,11 +457,9 @@ function leave() {
   deafenBtn.querySelector('span').textContent = 'Deafen';
   usersList.innerHTML = '';
 
-  // Disconnect and go back to join screen
   socket.disconnect();
   roomScreen.classList.add('hidden');
   joinScreen.classList.remove('hidden');
 
-  // Reconnect socket for next join
   socket.connect();
 }

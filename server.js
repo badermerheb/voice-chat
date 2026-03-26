@@ -42,15 +42,17 @@ io.on('connection', (socket) => {
 
   // WebRTC signaling
   socket.on('offer', ({ to, offer }) => {
-    socket.to(to).emit('offer', { from: socket.id, offer });
+    console.log(`[SIGNAL] offer from ${socket.id} -> ${to} (target exists: ${users.has(to)})`);
+    io.to(to).emit('offer', { from: socket.id, offer });
   });
 
   socket.on('answer', ({ to, answer }) => {
-    socket.to(to).emit('answer', { from: socket.id, answer });
+    console.log(`[SIGNAL] answer from ${socket.id} -> ${to}`);
+    io.to(to).emit('answer', { from: socket.id, answer });
   });
 
   socket.on('ice-candidate', ({ to, candidate }) => {
-    socket.to(to).emit('ice-candidate', { from: socket.id, candidate });
+    io.to(to).emit('ice-candidate', { from: socket.id, candidate });
   });
 
   // Mute/deafen state changes

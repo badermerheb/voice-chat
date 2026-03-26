@@ -10,21 +10,14 @@ let isDeafened = false;
 // Map of peerId -> { pc, gainNode, audioElement, username }
 const peers = new Map();
 
-// ICE servers (STUN + free TURN fallback for symmetric NAT)
+// ICE servers
 const iceConfig = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    {
-      urls: 'turn:openrelay.metered.ca:80',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-    {
-      urls: 'turn:openrelay.metered.ca:443',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
   ],
 };
 
@@ -149,18 +142,37 @@ socket.on('force-mute', () => {
 
 // ─── WebRTC ───
 
-function createPeerConnection(peerId, isOfferer) {
+async function createPeerConnection(peerId, isOfferer) {
   const pc = new RTCPeerConnection(iceConfig);
 
-  // Add our audio track
-  localStream.getTracks().forEach((track) => {
-    pc.addTrack(track, localStream);
+  // Store peer FIRST so handlers can find it
+  peers.set(peerId, {
+    pc,
+    gainNode: null,
+    source: null,
+    audioEl: null,
+    username: '',
   });
+
+  // ICE candidates
+  pc.onicecandidate = (event) => {
+    if (event.candidate) {
+      socket.emit('ice-candidate', { to: peerId, candidate: event.candidate });
+    }
+  };
+
+  // Log connection state for debugging
+  pc.onconnectionstatechange = () => {
+    console.log(`Peer ${peerId} connection: ${pc.connectionState}`);
+  };
+  pc.oniceconnectionstatechange = () => {
+    console.log(`Peer ${peerId} ICE: ${pc.iceConnectionState}`);
+  };
 
   // Handle incoming audio
   pc.ontrack = (event) => {
-    const remoteStream = event.streams[0];
-    if (!remoteStream) return;
+    console.log(`Got remote track from ${peerId}`, event.track.kind);
+    const remoteStream = event.streams[0] || new MediaStream([event.track]);
 
     // Resume audio context if suspended (browser autoplay policy)
     if (audioContext.state === 'suspended') {
@@ -181,8 +193,9 @@ function createPeerConnection(peerId, isOfferer) {
     audioEl.srcObject = destination.stream;
     audioEl.autoplay = true;
     audioEl.playsInline = true;
+    audioEl.volume = 1.0;
     document.body.appendChild(audioEl);
-    audioEl.play().catch(() => {});
+    audioEl.play().catch((e) => console.error('Audio play failed:', e));
 
     const peer = peers.get(peerId);
     if (peer) {
@@ -192,34 +205,22 @@ function createPeerConnection(peerId, isOfferer) {
     }
   };
 
-  // ICE candidates
-  pc.onicecandidate = (event) => {
-    if (event.candidate) {
-      socket.emit('ice-candidate', { to: peerId, candidate: event.candidate });
-    }
-  };
-
-  // Create offer if we're the initiator
-  if (isOfferer) {
-    pc.onnegotiationneeded = async () => {
-      try {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        socket.emit('offer', { to: peerId, offer });
-      } catch (e) {
-        console.error('Error creating offer:', e);
-      }
-    };
-  }
-
-  // Store peer
-  const existing = peers.get(peerId);
-  peers.set(peerId, {
-    pc,
-    gainNode: existing?.gainNode || null,
-    source: existing?.source || null,
-    username: existing?.username || '',
+  // Add our audio track AFTER handlers are set
+  localStream.getTracks().forEach((track) => {
+    pc.addTrack(track, localStream);
   });
+
+  // Explicitly create and send offer (don't rely on onnegotiationneeded)
+  if (isOfferer) {
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit('offer', { to: peerId, offer: pc.localDescription });
+      console.log(`Sent offer to ${peerId}`);
+    } catch (e) {
+      console.error('Error creating offer:', e);
+    }
+  }
 
   return pc;
 }

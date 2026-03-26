@@ -9,6 +9,34 @@ const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// TURN credentials endpoint - fetches from Metered.ca
+const METERED_API_KEY = process.env.METERED_API_KEY || '';
+const METERED_APP_NAME = process.env.METERED_APP_NAME || '';
+
+app.get('/api/ice-servers', async (req, res) => {
+  // Always include STUN
+  const iceServers = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ];
+
+  if (METERED_API_KEY && METERED_APP_NAME) {
+    try {
+      const url = `https://${METERED_APP_NAME}.metered.live/api/v1/turn/credentials?apiKey=${METERED_API_KEY}`;
+      const response = await fetch(url);
+      const turnServers = await response.json();
+      console.log(`[TURN] Fetched ${turnServers.length} TURN servers from Metered`);
+      res.json([...iceServers, ...turnServers]);
+    } catch (e) {
+      console.error('[TURN] Failed to fetch Metered credentials:', e.message);
+      res.json(iceServers);
+    }
+  } else {
+    console.log('[TURN] No METERED_API_KEY/METERED_APP_NAME set, STUN only');
+    res.json(iceServers);
+  }
+});
+
 // Track connected users: socketId -> { username, muted, deafened }
 const users = new Map();
 

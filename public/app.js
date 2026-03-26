@@ -10,14 +10,25 @@ let isDeafened = false;
 // Map of peerId -> { pc, gainNode, audioEl, source, username }
 const peers = new Map();
 
-// ICE servers
-const iceConfig = {
+// ICE servers - fetched dynamically (includes TURN if configured)
+let iceConfig = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
   ],
 };
+
+async function fetchIceServers() {
+  try {
+    const res = await fetch('/api/ice-servers');
+    const servers = await res.json();
+    iceConfig = { iceServers: servers };
+    const hasTurn = servers.some((s) => s.urls?.toString().includes('turn'));
+    dbg(`ICE servers loaded: ${servers.length} servers, TURN: ${hasTurn ? 'YES' : 'NO (STUN only)'}`);
+  } catch (e) {
+    dbg(`Failed to fetch ICE servers: ${e.message}, using defaults`);
+  }
+}
 
 // ─── Debug Logger ───
 const debugLog = document.getElementById('debug-log');
@@ -51,6 +62,9 @@ usernameInput.addEventListener('keydown', (e) => {
 async function join() {
   const name = usernameInput.value.trim();
   if (!name) return;
+
+  // Fetch TURN credentials before connecting
+  await fetchIceServers();
 
   try {
     localStream = await navigator.mediaDevices.getUserMedia({

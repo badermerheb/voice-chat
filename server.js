@@ -10,8 +10,10 @@ const io = new Server(server);
 app.use(express.static(path.join(__dirname, 'public')));
 
 // TURN credentials endpoint - fetches from Metered.ca
-const METERED_API_KEY = process.env.METERED_API_KEY || '';
-const METERED_APP_NAME = process.env.METERED_APP_NAME || '';
+const METERED_API_KEY = process.env.METERED_API_KEY || 'AkJDnFjQ9uvMfBOEurWK4RNboK99LL2Z7Dyqo0rrmSk68HGK';
+const METERED_APP_NAME = process.env.METERED_APP_NAME || 'ortachat';
+
+console.log(`[TURN] Config: app=${METERED_APP_NAME}, key=${METERED_API_KEY ? 'SET (' + METERED_API_KEY.substring(0, 6) + '...)' : 'NOT SET'}`);
 
 app.get('/api/ice-servers', async (req, res) => {
   // Always include STUN
@@ -20,19 +22,22 @@ app.get('/api/ice-servers', async (req, res) => {
     { urls: 'stun:stun1.l.google.com:19302' },
   ];
 
-  if (METERED_API_KEY && METERED_APP_NAME) {
-    try {
-      const url = `https://${METERED_APP_NAME}.metered.live/api/v1/turn/credentials?apiKey=${METERED_API_KEY}`;
-      const response = await fetch(url);
-      const turnServers = await response.json();
-      console.log(`[TURN] Fetched ${turnServers.length} TURN servers from Metered`);
+  try {
+    const url = `https://${METERED_APP_NAME}.metered.live/api/v1/turn/credentials?apiKey=${METERED_API_KEY}`;
+    console.log(`[TURN] Fetching from: ${url}`);
+    const response = await fetch(url);
+    const text = await response.text();
+    console.log(`[TURN] Response status: ${response.status}, body: ${text.substring(0, 200)}`);
+    const turnServers = JSON.parse(text);
+    if (Array.isArray(turnServers) && turnServers.length > 0) {
+      console.log(`[TURN] Got ${turnServers.length} TURN servers`);
       res.json([...iceServers, ...turnServers]);
-    } catch (e) {
-      console.error('[TURN] Failed to fetch Metered credentials:', e.message);
+    } else {
+      console.log(`[TURN] Unexpected response, returning STUN only`);
       res.json(iceServers);
     }
-  } else {
-    console.log('[TURN] No METERED_API_KEY/METERED_APP_NAME set, STUN only');
+  } catch (e) {
+    console.error('[TURN] Failed to fetch Metered credentials:', e.message);
     res.json(iceServers);
   }
 });

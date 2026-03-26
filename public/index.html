@@ -3,59 +3,138 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Voice Chat</title>
+  <title>Orta Chat</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
-  <!-- Join Screen -->
+
+  <!-- ═══ Join Screen ═══ -->
   <div id="join-screen">
-    <div class="join-box">
-      <h1>Voice Chat</h1>
-      <p>Enter your name to join the room</p>
-      <input type="text" id="username-input" placeholder="Your name..." maxlength="20" autocomplete="off">
-      <button id="join-btn">Join</button>
+    <div class="join-bg">
+      <div class="orb orb-1"></div>
+      <div class="orb orb-2"></div>
+      <div class="orb orb-3"></div>
+    </div>
+    <div class="join-card">
+      <div class="join-logo">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+      </div>
+      <h1>Orta Chat</h1>
+      <p>Jump into voice with your friends</p>
+      <div class="join-input-wrap">
+        <input type="text" id="username-input" placeholder="Enter your name..." maxlength="20" autocomplete="off" spellcheck="false">
+        <button id="join-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"/>
+            <polyline points="12 5 19 12 12 19"/>
+          </svg>
+        </button>
+      </div>
+      <div class="join-footer">End-to-end peer-to-peer audio</div>
     </div>
   </div>
 
-  <!-- Chat Room -->
+  <!-- ═══ Room Screen ═══ -->
   <div id="room-screen" class="hidden">
-    <div class="room-header">
-      <h2>Voice Room</h2>
-      <span id="user-count">0 online</span>
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="channel-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 3c-4.97 0-9 4.03-9 9v7c0 1.66 1.34 3 3 3h3v-8H5v-2c0-3.87 3.13-7 7-7s7 3.13 7 7v2h-4v8h3c1.66 0 3-1.34 3-3v-7c0-4.97-4.03-9-9-9z"/>
+          </svg>
+        </div>
+        <div class="channel-info">
+          <h2>Voice Room</h2>
+          <span id="user-count" class="channel-status">0 online</span>
+        </div>
+        <div class="connection-badge" id="connection-badge">
+          <span class="pulse-dot"></span>
+          Connected
+        </div>
+      </div>
+
+      <div class="users-section">
+        <div class="section-label">IN VOICE <span id="voice-count-badge" class="count-badge">0</span></div>
+        <div id="users-list"></div>
+      </div>
+
+      <!-- Self Panel -->
+      <div class="self-panel">
+        <div class="self-info">
+          <div class="self-avatar" id="self-avatar">?</div>
+          <div class="self-name" id="self-name">You</div>
+        </div>
+        <div class="self-controls">
+          <button id="mute-btn" class="control-btn" title="Mute">
+            <svg class="icon icon-on" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+              <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+            </svg>
+            <svg class="icon icon-off" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/>
+            </svg>
+            <span>Mute</span>
+          </button>
+          <button id="deafen-btn" class="control-btn" title="Deafen">
+            <svg class="icon icon-on" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 1c-4.97 0-9 4.03-9 9v7c0 1.66 1.34 3 3 3h3v-8H5v-2c0-3.87 3.13-7 7-7s7 3.13 7 7v2h-4v8h3c1.66 0 3-1.34 3-3v-7c0-4.97-4.03-9-9-9z"/>
+            </svg>
+            <svg class="icon icon-off" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 1c-4.97 0-9 4.03-9 9v7c0 1.66 1.34 3 3 3h3v-8H5v-2c0-3.87 3.13-7 7-7s7 3.13 7 7v2h-4v8h3c1.66 0 3-1.34 3-3v-7c0-4.97-4.03-9-9-9z"/>
+              <line x1="3" y1="3" x2="21" y2="21" stroke="currentColor" stroke-width="2"/>
+            </svg>
+            <span>Deafen</span>
+          </button>
+          <button id="leave-btn" class="control-btn leave" title="Disconnect">
+            <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/>
+            </svg>
+            <span>Leave</span>
+          </button>
+        </div>
+      </div>
     </div>
 
-    <div id="users-list"></div>
-
-    <div class="self-controls">
-      <button id="mute-btn" class="control-btn" title="Mute/Unmute">
-        <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
-          <path id="mic-icon-path" d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5z"/>
-          <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-        </svg>
-        <span>Mute</span>
-      </button>
-      <button id="deafen-btn" class="control-btn" title="Deafen/Undeafen">
-        <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
-          <path id="headphone-icon-path" d="M12 1c-4.97 0-9 4.03-9 9v7c0 1.66 1.34 3 3 3h3v-8H5v-2c0-3.87 3.13-7 7-7s7 3.13 7 7v2h-4v8h3c1.66 0 3-1.34 3-3v-7c0-4.97-4.03-9-9-9z"/>
-        </svg>
-        <span>Deafen</span>
-      </button>
-      <button id="leave-btn" class="control-btn leave" title="Leave">
-        <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5c-1.11 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
-        </svg>
-        <span>Leave</span>
-      </button>
-    </div>
+    <!-- Debug Toggle -->
+    <button id="debug-toggle" class="debug-toggle" title="Toggle debug log">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 20V10M18 20V4M6 20v-4"/>
+      </svg>
+    </button>
 
     <!-- Debug Panel -->
-    <div id="debug-panel" style="margin-top:16px;padding:12px;background:#1a1a2e;border:1px solid #444;border-radius:8px;max-height:200px;overflow-y:auto;font-family:monospace;font-size:11px;color:#0f0;">
-      <div style="color:#888;margin-bottom:4px;">Debug Log:</div>
-      <div id="debug-log"></div>
+    <div id="debug-panel" class="debug-panel hidden">
+      <div class="debug-header">
+        <span>Debug Log</span>
+        <button id="debug-close" class="debug-close-btn">&times;</button>
+      </div>
+      <div class="debug-content">
+        <div id="debug-log"></div>
+      </div>
     </div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="app.js"></script>
+  <script>
+    // Debug panel toggle
+    const debugToggle = document.getElementById('debug-toggle');
+    const debugPanel = document.getElementById('debug-panel');
+    const debugClose = document.getElementById('debug-close');
+    debugToggle?.addEventListener('click', () => debugPanel.classList.toggle('hidden'));
+    debugClose?.addEventListener('click', () => debugPanel.classList.add('hidden'));
+
+    // Self panel name/avatar
+    const origJoin = window.join;
+  </script>
 </body>
 </html>

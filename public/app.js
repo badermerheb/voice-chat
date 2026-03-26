@@ -86,6 +86,12 @@ async function join() {
   dbg(`AudioContext state: ${audioContext.state}, sampleRate: ${audioContext.sampleRate}`);
   myUsername = name;
 
+  // Update self panel
+  const selfAvatar = document.getElementById('self-avatar');
+  const selfName = document.getElementById('self-name');
+  if (selfAvatar) selfAvatar.textContent = name.charAt(0).toUpperCase();
+  if (selfName) selfName.textContent = name;
+
   joinScreen.classList.add('hidden');
   roomScreen.classList.remove('hidden');
 
@@ -363,6 +369,8 @@ function addUserToUI(id, username, muted, deafened) {
 function updateUserCount() {
   const count = document.querySelectorAll('.user-card').length + 1;
   userCount.textContent = `${count} online`;
+  const badge = document.getElementById('voice-count-badge');
+  if (badge) badge.textContent = count;
 }
 
 function escapeHtml(text) {
